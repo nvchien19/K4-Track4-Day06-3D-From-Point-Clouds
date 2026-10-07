@@ -32,7 +32,13 @@ def velo_to_cam(points_xyz: np.ndarray, calib: KittiCalib) -> np.ndarray:
       3. Trả về 3 cột đầu.
     Tự kiểm: một điểm velodyne (10, 0, 0) phải có z_cam ~ 10 (phía trước camera).
     """
-    raise NotImplementedError("TODO(CP2): cài đặt velo_to_cam")
+    points_xyz = np.asarray(points_xyz, dtype=np.float64)
+    if points_xyz.ndim != 2 or points_xyz.shape[1] != 3:
+        raise ValueError("points_xyz phải có shape (N, 3)")
+    points_h = np.concatenate(
+        [points_xyz, np.ones((len(points_xyz), 1), dtype=points_xyz.dtype)], axis=1
+    )
+    return (calib.T_cam_velo @ points_h.T).T[:, :3]
 
 
 def cam_to_image(points_cam: np.ndarray, P2: np.ndarray, image_shape: tuple[int, ...],
@@ -52,7 +58,35 @@ def cam_to_image(points_cam: np.ndarray, P2: np.ndarray, image_shape: tuple[int,
       3. Chia cho s để có (u, v). Chỉ chia với điểm có depth > min_depth.
       4. Lọc theo kích thước ảnh image_shape[:2] = (H, W).
     """
-    raise NotImplementedError("TODO(CP2): cài đặt cam_to_image")
+    points_cam = np.asarray(points_cam, dtype=np.float64)
+    if points_cam.ndim != 2 or points_cam.shape[1] != 3:
+        raise ValueError("points_cam phải có shape (N, 3)")
+
+    height, width = image_shape[:2]
+    finite = np.isfinite(points_cam).all(axis=1)
+    depth_all = points_cam[:, 2]
+    depth_ok = finite & (depth_all > min_depth)
+
+    # Avoid propagating NaN/Inf into matrix multiplication; retain original row
+    # alignment so the returned mask always has length N.
+    uv_all = np.full((len(points_cam), 2), np.nan, dtype=np.float64)
+    idx = np.flatnonzero(depth_ok)
+    if idx.size:
+        points_h = np.column_stack([points_cam[idx], np.ones(idx.size)])
+        projected = (np.asarray(P2, dtype=np.float64) @ points_h.T).T
+        scale = projected[:, 2]
+        projectable = np.isfinite(projected).all(axis=1) & (np.abs(scale) > 1e-12)
+        uv_all[idx[projectable]] = projected[projectable, :2] / scale[projectable, None]
+
+    inside = (
+        depth_ok
+        & np.isfinite(uv_all).all(axis=1)
+        & (uv_all[:, 0] >= 0)
+        & (uv_all[:, 0] < width)
+        & (uv_all[:, 1] >= 0)
+        & (uv_all[:, 1] < height)
+    )
+    return uv_all[inside], depth_all[inside], inside
 
 
 def project_velo_to_image(points: np.ndarray, calib: KittiCalib, image_shape: tuple[int, ...]):

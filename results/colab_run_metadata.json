@@ -1,0 +1,14 @@
+{
+  "platform": "Linux-6.6.122+-x86_64-with-glibc2.39",
+  "python": "3.13.16",
+  "numpy": "2.1.3",
+  "base_commit": "bce73adec3dbd09b2869ed2061513328ee228272",
+  "csv_sha256": "0f530d1ecf793a3ce3708597f9cb5245f8840652862b6b44c84cf9dc0966187c",
+  "yaw_degs": [
+    0,
+    0.5,
+    1,
+    2,
+    3
+  ]
+}
